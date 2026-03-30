@@ -33,6 +33,15 @@ export async function getSlackUserName(userId: string, botToken: string): Promis
   return userId;
 }
 
+export async function getSlackTeamName(teamId: string, botToken: string): Promise<string> {
+  try {
+    const res = await fetch(`https://slack.com/api/team.info?team=${teamId}`, { headers: { Authorization: `Bearer ${botToken}` } });
+    const data = await res.json();
+    if (data.ok && data.team?.name) return data.team.name;
+  } catch {}
+  return teamId;
+}
+
 export async function getChannelName(channelId: string, botToken: string): Promise<string> {
   try {
     const res = await fetch(`https://slack.com/api/conversations.info?channel=${channelId}`, { headers: { Authorization: `Bearer ${botToken}` } });
