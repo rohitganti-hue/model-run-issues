@@ -1,5 +1,17 @@
 import { sql } from '@vercel/postgres';
 
+// Mercor Enterprise Grid workspace mapping
+// Maps Slack team_id -> { name, prefix } for all Mercor workspaces
+const MERCOR_WORKSPACE_INFO: Record<string, { name: string; prefix: string }> = {
+  'T0AFLJDUS4A': { name: 'Project yosemite', prefix: 'YOS' },
+  'T0AP5HJJXB8': { name: 'Project everglades', prefix: 'EVE' },
+  'T0AFM07SM8U': { name: 'Project yosemite - work trial', prefix: 'YWT' },
+};
+
+export function getMercorWorkspaceInfo(teamId: string): { name: string; prefix: string } {
+  return MERCOR_WORKSPACE_INFO[teamId] ?? { name: teamId, prefix: getWorkspacePrefix(teamId) };
+}
+
 export async function initDB() {
   await sql`
     CREATE TABLE IF NOT EXISTS tickets (
@@ -20,7 +32,6 @@ export async function initDB() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
   `;
-  // Migrate existing tables
   await sql`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(50) DEFAULT 'unknown';`;
   await sql`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS workspace_name VARCHAR(100) DEFAULT 'Unknown';`;
 }
@@ -32,9 +43,7 @@ export function getWorkspacePrefix(workspaceName: string): string {
 
 export async function getNextTicketId(workspaceId: string, prefix: string): Promise<string> {
   const result = await sql`
-    SELECT ticket_id FROM tickets
-    WHERE workspace_id = ${workspaceId}
-    ORDER BY id DESC LIMIT 1;
+    SELECT ticket_id FROM tickets WHERE workspace_id = ${workspaceId} ORDER BY id DESC LIMIT 1;
   `;
   if (result.rows.length === 0) return `${prefix}-0001`;
   const last = result.rows[0].ticket_id as string;
