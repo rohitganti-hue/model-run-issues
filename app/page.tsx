@@ -1,4 +1,7 @@
-import Dashboard from '@/components/Dashboard';
 export default function Home() {
-  return <Dashboard />;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', color: '#666' }}>
+      <p>Dashboard temporarily offline. Check back soon.</p>
+    </div>
+  );
 }
