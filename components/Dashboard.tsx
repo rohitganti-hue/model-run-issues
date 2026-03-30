@@ -1,5 +1,4 @@
 'use client';
-
 import { useEffect, useState, useCallback } from 'react';
 
 type Status = 'open' | 'in_progress' | 'resolved' | 'closed';
@@ -8,6 +7,8 @@ type Filter = 'all' | Status;
 interface Ticket {
   id: number;
   ticket_id: string;
+  workspace_id: string;
+  workspace_name: string;
   reporter: string;
   description: string;
   task_id: string | null;
@@ -24,11 +25,17 @@ interface Stats {
   total: string;
 }
 
+interface Workspace {
+  workspace_id: string;
+  workspace_name: string;
+  ticket_count: string;
+}
+
 const STATUS_COLORS: Record<Status, { bg: string; text: string }> = {
-  open:        { bg: '#3d1515', text: '#f87171' },
+  open: { bg: '#3d1515', text: '#f87171' },
   in_progress: { bg: '#3d2d0a', text: '#fbbf24' },
-  resolved:    { bg: '#0d2d1a', text: '#34d399' },
-  closed:      { bg: '#1e1e2e', text: '#94a3b8' },
+  resolved: { bg: '#0d2d1a', text: '#34d399' },
+  closed: { bg: '#1e1e2e', text: '#94a3b8' },
 };
 
 const STATUS_LABELS: Record<Status, string> = {
@@ -52,19 +59,22 @@ function StatCard({ label, value, color }: { label: string; value: number; color
 export default function Dashboard() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [stats, setStats] = useState<Stats>({ open: '0', in_progress: '0', resolved: '0', total: '0' });
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
+  const [workspace, setWorkspace] = useState<string>('all');
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [updating, setUpdating] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch(`/api/tickets?status=${filter}`, { cache: 'no-store' });
+      const res = await fetch(`/api/tickets?status=${filter}&workspace=${workspace}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.tickets) setTickets(data.tickets);
       if (data.stats) setStats(data.stats);
+      if (data.workspaces) setWorkspaces(data.workspaces);
       setLastRefresh(new Date());
     } catch {}
-  }, [filter]);
+  }, [filter, workspace]);
 
   useEffect(() => {
     fetchData();
@@ -75,7 +85,11 @@ export default function Dashboard() {
   const updateStatus = async (ticketId: string, newStatus: Status) => {
     setUpdating(ticketId);
     try {
-      await fetch(`/api/tickets/${ticketId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) });
+      await fetch(`/api/tickets/${ticketId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
       await fetchData();
     } finally { setUpdating(null); }
   };
@@ -85,27 +99,62 @@ export default function Dashboard() {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
+  const activeWorkspaceName = workspace === 'all' ? null : workspaces.find(w => w.workspace_id === workspace)?.workspace_name;
+  const title = activeWorkspaceName ? `${activeWorkspaceName} — Model Run Issues` : 'Mercor Model Run Issues';
+
   const filters: { label: string; value: Filter }[] = [
-    { label: 'All', value: 'all' }, { label: 'Open', value: 'open' },
-    { label: 'In Progress', value: 'in_progress' }, { label: 'Resolved', value: 'resolved' }, { label: 'Closed', value: 'closed' },
+    { label: 'All', value: 'all' },
+    { label: 'Open', value: 'open' },
+    { label: 'In Progress', value: 'in_progress' },
+    { label: 'Resolved', value: 'resolved' },
+    { label: 'Closed', value: 'closed' },
   ];
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px' }}>
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>Yosemite Model Run Issues</h1>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>{title}</h1>
         <p style={{ color: '#64748b', fontSize: 14 }}>Issues reported via @ModelRunIssue in Slack</p>
       </div>
+
+      {/* Workspace tabs */}
+      {workspaces.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 28, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setWorkspace('all')}
+            style={{ padding: '8px 18px', borderRadius: 20, border: workspace === 'all' ? '2px solid #6366f1' : '1px solid #2d3148', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: workspace === 'all' ? '#1e1b4b' : '#1a1d2e', color: workspace === 'all' ? '#a5b4fc' : '#64748b', transition: 'all 0.15s' }}>
+            All Workspaces
+            <span style={{ marginLeft: 6, background: '#2d3148', borderRadius: 10, padding: '1px 7px', fontSize: 11, color: '#94a3b8' }}>{workspaces.reduce((s, w) => s + parseInt(w.ticket_count), 0)}</span>
+          </button>
+          {workspaces.map(w => (
+            <button
+              key={w.workspace_id}
+              onClick={() => setWorkspace(w.workspace_id)}
+              style={{ padding: '8px 18px', borderRadius: 20, border: workspace === w.workspace_id ? '2px solid #6366f1' : '1px solid #2d3148', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: workspace === w.workspace_id ? '#1e1b4b' : '#1a1d2e', color: workspace === w.workspace_id ? '#a5b4fc' : '#64748b', transition: 'all 0.15s' }}>
+              {w.workspace_name}
+              <span style={{ marginLeft: 6, background: '#2d3148', borderRadius: 10, padding: '1px 7px', fontSize: 11, color: '#94a3b8' }}>{w.ticket_count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Stats */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
         <StatCard label="Open" value={parseInt(stats.open)} color="#f87171" />
         <StatCard label="In Progress" value={parseInt(stats.in_progress)} color="#fbbf24" />
         <StatCard label="Resolved" value={parseInt(stats.resolved)} color="#34d399" />
         <StatCard label="Total" value={parseInt(stats.total)} color="#e2e8f0" />
       </div>
+
+      {/* Filter bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           {filters.map(f => (
-            <button key={f.value} onClick={() => setFilter(f.value)} style={{ padding: '7px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, background: filter === f.value ? '#3b82f6' : '#1a1d2e', color: filter === f.value ? '#fff' : '#94a3b8' }}>{f.label}</button>
+            <button key={f.value} onClick={() => setFilter(f.value)}
+              style={{ padding: '7px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, background: filter === f.value ? '#3b82f6' : '#1a1d2e', color: filter === f.value ? '#fff' : '#94a3b8' }}>
+              {f.label}
+            </button>
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#64748b' }}>
@@ -113,31 +162,38 @@ export default function Dashboard() {
           Auto-refreshes every 15s · Last: {lastRefresh.toLocaleTimeString()}
         </div>
       </div>
+
+      {/* Tickets table */}
       <div style={{ background: '#1a1d2e', border: '1px solid #2d3148', borderRadius: 12, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid #2d3148' }}>
-              {['Ticket','Reporter','Error / Description','Task ID','Status','Channel','Reported','Actions','Link'].map(h => (
+              {['Ticket', 'Workspace', 'Reporter', 'Error / Description', 'Task ID', 'Status', 'Channel', 'Reported', 'Actions', 'Link'].map(h => (
                 <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {tickets.length === 0 ? (
-              <tr><td colSpan={9} style={{ padding: '48px 16px', textAlign: 'center', color: '#475569' }}>No tickets yet — tag @ModelRunIssue in Slack to log one.</td></tr>
+              <tr><td colSpan={10} style={{ padding: '48px 16px', textAlign: 'center', color: '#475569' }}>No tickets yet — tag @ModelRunIssue in Slack to log one.</td></tr>
             ) : tickets.map((ticket, i) => (
-              <tr key={ticket.id} style={{ borderBottom: i < tickets.length - 1 ? '1px solid #1e2235' : 'none' }}
+              <tr key={ticket.id}
+                style={{ borderBottom: i < tickets.length - 1 ? '1px solid #1e2235' : 'none' }}
                 onMouseEnter={e => (e.currentTarget.style.background = '#1e2235')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 600, color: '#60a5fa', whiteSpace: 'nowrap' }}>{ticket.ticket_id}</td>
+                <td style={{ padding: '14px 16px', fontSize: 12, whiteSpace: 'nowrap' }}>
+                  <span style={{ background: '#1e1b4b', color: '#a5b4fc', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>{ticket.workspace_name || '—'}</span>
+                </td>
                 <td style={{ padding: '14px 16px', fontSize: 13, color: '#e2e8f0', whiteSpace: 'nowrap' }}>{ticket.reporter}</td>
-                <td style={{ padding: '14px 16px', fontSize: 13, color: '#cbd5e1', maxWidth: 280 }}><div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.description}</div></td>
+                <td style={{ padding: '14px 16px', fontSize: 13, color: '#cbd5e1', maxWidth: 260 }}><div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ticket.description}</div></td>
                 <td style={{ padding: '14px 16px', fontSize: 13, color: '#e2e8f0', whiteSpace: 'nowrap' }}>{ticket.task_id ?? '—'}</td>
                 <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}><StatusBadge status={ticket.status} /></td>
                 <td style={{ padding: '14px 16px', fontSize: 13, color: '#94a3b8', whiteSpace: 'nowrap' }}>{ticket.channel}</td>
                 <td style={{ padding: '14px 16px', fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>{formatDate(ticket.created_at)}</td>
                 <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                  <select disabled={updating === ticket.ticket_id} value={ticket.status} onChange={e => updateStatus(ticket.ticket_id, e.target.value as Status)}
+                  <select disabled={updating === ticket.ticket_id} value={ticket.status}
+                    onChange={e => updateStatus(ticket.ticket_id, e.target.value as Status)}
                     style={{ background: '#0f1117', border: '1px solid #2d3148', borderRadius: 6, color: '#94a3b8', fontSize: 12, padding: '4px 8px', cursor: 'pointer', opacity: updating === ticket.ticket_id ? 0.5 : 1 }}>
                     <option value="open">Open</option>
                     <option value="in_progress">In Progress</option>
