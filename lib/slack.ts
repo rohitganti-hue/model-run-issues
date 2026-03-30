@@ -1,15 +1,6 @@
 import crypto from 'crypto';
 
 export function verifySlackSignature(signingSecret: string, body: string, timestamp: string, signature: string): boolean {
-  const fiveMinutes = 60 * 5;
-  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > fiveMinutes) return false;
-  const sigBasestring = `v0:${timestamp}:${body}`;
-  const mySig = 'v0=' + crypto.createHmac('sha256', signingSecret).update(sigBasestring).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(mySig), Buffer.from(signature));
-}
-import crypto from 'crypto';
-
-export function verifySlackSignature(signingSecret: string, body: string, timestamp: string, signature: string): boolean {
     if (!signingSecret || !timestamp || !signature) return false;
     const fiveMinutes = 60 * 5;
     if (Math.abs(Date.now() / 1000 - Number(timestamp)) > fiveMinutes) return false;
